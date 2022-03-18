@@ -2,17 +2,17 @@ apiVersion: v1
 entries:
   mayastor-control-plane:
   - apiVersion: v2
-    created: "2022-03-14T20:36:00.0056334+02:00"
+    created: "2022-03-18T18:56:17.912112199+02:00"
     dependencies:
     - condition: base.jaeger.enabled
       name: jaeger-operator
       repository: https://jaegertracing.github.io/helm-charts
       version: 2.25.0
     description: A Helm chart for Kubernetes
-    digest: 1aa05a6f1b69d2b71631097ec024d365e1e21143d7b3720899f0b6fee051cf05
+    digest: b7f4018d47cf9a2483bb135ca099936269ad33b124268598f76786318f4f3e83
     name: mayastor-control-plane
     type: application
     urls:
     - mayastor-control-plane-0.0.1.tgz
     version: 0.0.1
-generated: "2022-03-14T20:36:00.003130962+02:00"
+generated: "2022-03-18T18:56:17.90985085+02:00"
