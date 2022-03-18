@@ -251,6 +251,8 @@ pub struct OperatorContext {
     interval: u64,
     /// Retries
     retries: u32,
+    /// Disable device validation before attempting to create the pool
+    disable_device_validation: bool,
 }
 
 impl OperatorContext {
@@ -429,93 +431,95 @@ impl ResourceContext {
             // we updated the resource as an error stop reconciliation
             return Err(Error::ReconcileError { name: self.name() });
         }
-        match self
+        if !self.disable_device_validation {
+            match self
             .block_devices_api()
             .get_node_block_devices(&self.spec.node, Some(true))
             .await
-        {
-            Ok(response) => {
-                if !response.into_body().into_iter().any(|b| {
-                    b.devname == normalize_disk(&self.spec.disks[0])
-                        || b.devlinks
-                            .iter()
-                            .any(|d| *d == normalize_disk(&self.spec.disks[0]))
-                }) {
-                    self.k8s_notify(
-                        "Create or import",
-                        "Missing",
-                        &format!(
-                            "The block device(s): {} can not be found",
-                            &self.spec.disks[0]
-                        ),
-                        "Warn",
-                    )
-                    .await;
-
-                    return Err(Error::SpecError {
-                        value: self.spec.disks[0].clone(),
-                        timeout: u32::pow(2, self.num_retries),
-                    });
-                }
-
-                let mut labels: HashMap<String, String> = HashMap::new();
-                labels.insert(
-                    String::from(utils::OPENEBS_CREATED_BY_KEY),
-                    String::from(utils::MSP_OPERATOR),
-                );
-
-                let body = CreatePoolBody::new_all(self.spec.disks.clone(), labels);
-                match self
-                    .pools_api()
-                    .put_node_pool(&self.spec.node, &self.name(), body)
-                    .await
-                {
-                    Ok(_) => {}
-                    Err(clients::tower::Error::Response(response))
-                        if response.status()
-                            == clients::tower::StatusCode::UNPROCESSABLE_ENTITY =>
-                    {
-                        // UNPROCESSABLE_ENTITY indicates that the pool spec already exists in the
-                        // control plane. So we want to update the CRD to
-                        // 'Created' to reflect this.
-                    }
-                    Err(e) => {
-                        return Err(e.into());
-                    }
-                };
-
-                self.k8s_notify(
-                    "Create or Import",
-                    "Created",
-                    "Created or imported pool",
-                    "Normal",
-                )
-                .await;
-
-                let _ = self.patch_status(MayastorPoolStatus::created()).await?;
-
-                // We are done creating the pool, we patched to created which triggers a
-                // new loop. Any error in the loop will call our error handler where we
-                // decide what to do
-                Ok(ReconcilerAction {
-                    requeue_after: None,
-                })
-            }
-            // We would land here if some error occurred ex, precondition failed, i.e. node
-            // down, in that case we check for pool existence before setting a status.
-            Err(_) => match self.pools_api().get_pool(&self.name()).await {
+            {
                 Ok(response) => {
-                    let pool = response.into_body();
-                    // As pool exists, set the status based on the presence of pool state.
-                    self.set_status_or_unknown(pool).await
-                }
-                Err(_) => {
-                    // If we don't find the pool, i.e. its not present or not yet created
-                    // so, set the status to Creating to retry creation.
-                    return self.mark_error().await;
-                }
-            },
+                    if !response.into_body().into_iter().any(|b| {
+                        b.devname == normalize_disk(&self.spec.disks[0])
+                            || b.devlinks
+                                .iter()
+                                .any(|d| *d == normalize_disk(&self.spec.disks[0]))
+                    }) {
+                        self.k8s_notify(
+                            "Create or import",
+                            "Missing",
+                            &format!(
+                                "The block device(s): {} can not be found",
+                                &self.spec.disks[0]
+                            ),
+                            "Warn",
+                        )
+                        .await;
+
+                        return Err(Error::SpecError {
+                            value: self.spec.disks[0].clone(),
+                            timeout: u32::pow(2, self.num_retries),
+                        });
+                    }
+                },
+                // We would land here if some error occurred ex, precondition failed, i.e. node
+                // down, in that case we check for pool existence before setting a status.
+                Err(_) => match self.pools_api().get_pool(&self.name()).await {
+                    Ok(response) => {
+                        let pool = response.into_body();
+                        // As pool exists, set the status based on the presence of pool state.
+                        return self.set_status_or_unknown(pool).await;
+                    }
+                    Err(_) => {
+                        // If we don't find the pool, i.e. its not present or not yet created
+                        // so, set the status to Creating to retry creation.
+                        return self.mark_error().await;
+                    }
+                },
+            }
         }
+
+        let mut labels: HashMap<String, String> = HashMap::new();
+        labels.insert(
+            String::from(utils::OPENEBS_CREATED_BY_KEY),
+            String::from(utils::MSP_OPERATOR),
+        );
+
+        let body = CreatePoolBody::new_all(self.spec.disks.clone(), labels);
+        match self
+            .pools_api()
+            .put_node_pool(&self.spec.node, &self.name(), body)
+            .await
+        {
+            Ok(_) => {}
+            Err(clients::tower::Error::Response(response))
+                if response.status()
+                    == clients::tower::StatusCode::UNPROCESSABLE_ENTITY =>
+            {
+                // UNPROCESSABLE_ENTITY indicates that the pool spec already exists in the
+                // control plane. So we want to update the CRD to
+                // 'Created' to reflect this.
+            }
+            Err(e) => {
+                return Err(e.into());
+            }
+        };
+
+        self.k8s_notify(
+            "Create or Import",
+            "Created",
+            "Created or imported pool",
+            "Normal",
+        )
+        .await;
+
+        let _ = self.patch_status(MayastorPoolStatus::created()).await?;
+
+        // We are done creating the pool, we patched to created which triggers a
+        // new loop. Any error in the loop will call our error handler where we
+        // decide what to do
+        Ok(ReconcilerAction {
+            requeue_after: None,
+        })
     }
 
     /// Delete the pool from the mayastor instance
@@ -911,6 +915,9 @@ async fn pool_controller(args: ArgMatches<'_>) -> anyhow::Result<()> {
             .unwrap()
             .parse::<u32>()
             .expect("retries value is invalid"),
+        disable_device_validation: args
+            .is_present("disable_device_validation")
+            .unwrap(),
     });
 
     info!(
@@ -1005,6 +1012,14 @@ async fn main() -> anyhow::Result<()> {
                 .help(
                     "writes out the CRD file to current directory with the optional name and exits",
                 ),
+        )
+        .arg(
+            Arg::with_name("disable_device_validation")
+                .long("disable-device-validation")
+                .takes_value(false)
+                .help(
+                    "disables validation of the block device before attempt to create mayastor pool"
+                )
         )
         .get_matches();
 
