@@ -34,6 +34,9 @@ spec:
             {{- if .Values.msp.disableDeviceValidation }}
             - "--disable-device-validation"
             {{- end }}
+            {{- if .Values.msp.numRetries }}
+            - "-r={{ .Values.msp.numRetries }}"
+            {{- end }}
           env:
             - name: RUST_LOG
               value: info,msp_operator={{ .Values.mayastorCP.logLevel }}
