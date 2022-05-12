@@ -104,6 +104,8 @@ csi:
     image: "mayadata/mayastor-csi-controller"
   node:
     image: "mayadata/mayastor-csi-node"
+    nodeSelector:
+      - kubernetes.io/arch: amd64
     driverRegistrar:
       image: "quay.io/k8scsi/csi-node-driver-registrar:v2.1.0"
   resources:
