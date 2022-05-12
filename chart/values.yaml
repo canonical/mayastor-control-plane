@@ -104,6 +104,8 @@ csi:
     image: "mayadata/mayastor-csi-controller"
   node:
     image: "mayadata/mayastor-csi-node"
+    driverRegistrar:
+      image: "quay.io/k8scsi/csi-node-driver-registrar:v2.1.0"
   resources:
     limits:
       cpu: "32m"

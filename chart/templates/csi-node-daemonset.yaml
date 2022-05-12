@@ -74,7 +74,7 @@ spec:
             cpu: "100m"
             memory: "50Mi"
       - name: csi-driver-registrar
-        image: quay.io/k8scsi/csi-node-driver-registrar:v2.1.0
+        image: {{ .Values.csi.node.driverRegistrar.image | quote }}
         args:
         - "--csi-address=/csi/csi.sock"
         - "--kubelet-registration-path={{ .Values.kubeletDir }}/plugins/mayastor.openebs.io/csi.sock"
