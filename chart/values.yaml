@@ -14,17 +14,17 @@ base:
     enabled: true
     containers:
       - name: grpc-probe
-        image: busybox:latest
+        image: "{{ .Values.busyboxImage }}"
         command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz core 50051; do echo "Waiting for grpc services..."; sleep 1; done;' ]
       - name: etcd-probe
-        image: busybox:latest
+        image: "{{ .Values.busyboxImage }}"
         command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz {{ .Values.etcdEndpoint }} 2379; do echo "Waiting for etcd..."; sleep 1; done;' ]
 
   initCoreContainers:
     enabled: true
     containers:
       - name: etcd-probe
-        image: busybox:latest
+        image: "{{ .Values.busyboxImage }}"
         command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz {{ .Values.etcdEndpoint }} 2379; do echo "Waiting for etcd..."; sleep 1; done;' ]
 
   imagePullSecrets:
@@ -40,14 +40,14 @@ base:
       port: 6831
       initContainer:
         - name: jaeger-probe
-          image: busybox:latest
+          image: "{{ .Values.busyboxImage }}"
           command: [ 'sh', '-c', 'trap "exit 1" TERM; until nc -vz -u {{.Values.base.jaeger.agent.name}} {{.Values.base.jaeger.agent.port}}; do echo "Waiting for jaeger..."; sleep 1; done;' ]
 
   initRestContainer:
     enabled: true
     initContainer:
       - name: rest-probe
-        image: busybox:latest
+        image: "{{ .Values.busyboxImage }}"
         command: ['sh', '-c', 'trap "exit 1" TERM; until nc -vz rest 8081; do echo "Waiting for REST API endpoint to become available"; sleep 1; done;']
 
 operators:
@@ -121,3 +121,5 @@ csi:
     io_timeout_enabled: true
 
 kubeletDir: /var/lib/kubelet
+
+busyboxImage: busybox:latest
