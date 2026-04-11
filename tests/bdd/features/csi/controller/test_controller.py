@@ -673,7 +673,7 @@ def check_nvmf_target(uri):
 
     command = "sudo nvme discover -t tcp -s {0} -a {1} -o json".format(port, host)
     status = subprocess.run(
-        command, shell=True, check=True, text=True, capture_output=True
+        command, shell=True, check=True, text=True, capture_output=True  # nosec B602
     )
 
     # Make sure nvmf target exists.
